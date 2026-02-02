@@ -1,8 +1,8 @@
 import { ExtendedRecordMap, Decoration } from 'notion-types'
+// import { getTextContent } from 'notion-utils'
 
 
 // --- 1. 类型定义 ---
-
 export interface Post {
   id: string
   title: string
@@ -19,6 +19,7 @@ interface AlertData {
 interface PostGridData {
   title: string
   posts: Post[]
+  type?: string
 }
 
 interface HeroData {
@@ -84,7 +85,7 @@ export function parseSiteConfig(recordMap: ExtendedRecordMap): Section[] {
 
   if (!rootBlock || !rootBlock.content) return []
 
-  // console.log(`[Parser] 解析页面 ID: ${rootId}, 包含子块数量: ${rootBlock.content.length}`)
+  console.log(`[Parser] 解析页面 ID: ${rootId}, 包含子块数量: ${rootBlock.content.length}`)
 
   for (const blockId of rootBlock.content) {
     const rawBlock = recordMap.block[blockId]?.value
@@ -144,13 +145,23 @@ export function parseSiteConfig(recordMap: ExtendedRecordMap): Section[] {
         }
         continue
       }
-    // ➤ B. 处理 Database (文章库)
+    // ➤ B. 处理 Database
     if (block.type === 'collection_view' || block.type === 'collection_view_page') {
+        console.log('--- 发现数据库 ---')
+        console.log('Block ID:', block.id)
+        console.log('Collection ID:', block.collection_id)
+        console.log('View IDs:', block.view_ids)
+
       const collectionId = block.collection_id
       if (!collectionId) continue
 
       const collection = recordMap.collection?.[collectionId]?.value
       const collectionName = collection?.name?.[0]?.[0] || '精选文章'
+      
+      const firstViewId = block.view_ids?.[0]
+      const viewType = firstViewId 
+        ? recordMap.collection_view?.[firstViewId]?.value?.type 
+        : 'list' // 默认回落到 list
 
       let postIds: string[] = []
       const targetViewIds = block.view_ids || []
@@ -196,12 +207,15 @@ export function parseSiteConfig(recordMap: ExtendedRecordMap): Section[] {
           }
         }).filter((item): item is Post => !!item)
 
+        console.log(`数据库 [${collectionName}] 解析出了 ${posts.length} 篇文章`)
+
         sections.push({
           id: blockId,
           type: 'PostGrid',
           data: {
             title: collectionName,
-            posts: posts
+            posts: posts,
+            type: viewType
           }
         })
       }

@@ -3,30 +3,37 @@
 import { NotionRenderer } from 'react-notion-x'
 import { ExtendedRecordMap } from 'notion-types'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import Image from 'next/image'
-import dynamic from 'next/dynamic' // 用于动态加载重型组件
+import { ComponentProps } from 'react' // 引入 React 标准类型
 
 // 样式
 import 'react-notion-x/src/styles.css'
-import 'prismjs/themes/prism-tomorrow.css' // 代码高亮样式
-import 'katex/dist/katex.min.css' // 公式样式
+import 'prismjs/themes/prism-tomorrow.css'
+import 'katex/dist/katex.min.css'
 
-// 动态加载 Code (代码块) 组件，减小首屏体积
+// 动态组件加载
 const Code = dynamic(() =>
   import('react-notion-x/build/third-party/code').then((m) => m.Code)
 )
-// 动态加载 Collection (数据库视图) 组件
 const Collection = dynamic(() =>
   import('react-notion-x/build/third-party/collection').then((m) => m.Collection)
 )
-// 动态加载 Equation (数学公式) 组件
 const Equation = dynamic(() =>
   import('react-notion-x/build/third-party/equation').then((m) => m.Equation)
+)
+const Pdf = dynamic(() =>
+  import('react-notion-x/build/third-party/pdf').then((m) => m.Pdf),
+  { ssr: false }
+)
+const Modal = dynamic(
+  () => import('react-notion-x/build/third-party/modal').then((m) => m.Modal),
+  { ssr: false }
 )
 
 interface NotionPageProps {
   recordMap: ExtendedRecordMap
-  rootPageId?: string // 新增：传入根页面ID，用于判断“返回首页”等逻辑
+  rootPageId?: string
 }
 
 export default function NotionPage({ recordMap, rootPageId }: NotionPageProps) {
@@ -38,20 +45,46 @@ export default function NotionPage({ recordMap, rootPageId }: NotionPageProps) {
         recordMap={recordMap}
         fullPage={true}
         darkMode={false}
-        disableHeader={true}
         rootPageId={rootPageId}
+        disableHeader={true}
+        
+        // 1. URL 映射逻辑
+        mapPageUrl={(pageId) => {
+          // 如果目标 ID 等于根页面 ID (rootPageId)，强制映射回网站根路径 '/'
+          // 注意：你需要确保传入组件的 rootPageId 格式是 clean 的（无横杠），
+          // 或者在这里做一下比较逻辑的兼容。通常比较建议两个都转成 clean uuid 比较。
+          
+          const cleanTargetId = pageId.replace(/-/g, '')
+          const cleanRootId = rootPageId?.replace(/-/g, '')
+        
+          if (cleanTargetId === cleanRootId) {
+            return '/'
+          }
+          
+          return `/${pageId}`
+        }}
 
-        // 核心配置 1: 链接重映射
-        // 告诉渲染器：遇到页面链接时，去掉 https://notion.so/前缀，只保留 pageId
-        mapPageUrl={(pageId) => `/${pageId}`}
-
-        // 核心配置 2: 注入 Next.js 组件
+        // 2. 自定义组件注入 (严格类型版)
         components={{
-          nextImage: Image, // 使用 Next.js 的优化图片组件
-          nextLink: Link,   // 使用 Next.js 的无刷新路由组件
+          // 使用 ComponentProps<'a'> 替换 any，这是标准的 HTML 锚点类型
+          Link: ({ href, children, ...props }: ComponentProps<'a'>) => {
+            return (
+              <Link 
+                href={href || ''} // 确保 href 不为 undefined
+                {...props} 
+                className="notion-link"
+              >
+                {children}
+              </Link>
+            )
+          },
           Code,
           Collection,
           Equation,
+          Pdf,
+          Modal,
+          // 如果你要开启 Image 优化，请使用以下类型定义：
+          // Image: ({ src, alt, height, width, className, style, priority }: ComponentProps<typeof Image>) => { ... }
         }}
       />
     </div>
